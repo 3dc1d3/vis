@@ -31,6 +31,17 @@ vc_determine_command() {
 		return 0
 	fi
 
+	cmd='/mnt/c/Windows/System32/cmd.exe'
+	if [ "$cmd /C where powershell" ]; then
+		echo 'wsl_ps'
+		return 0
+	fi
+
+	if [ "$cmd /C where win32yank" ]; then
+		echo 'wsl_yank'
+		return 0
+	fi
+
 	return 1
 }
 
@@ -96,6 +107,30 @@ vc_cygwin_copy() {
 
 vc_cygwin_paste() {
 	cat /dev/clipboard
+}
+
+vc_wsl_ps_paste() {
+	# piggybacking as can't garantee path to powershell
+	cmd='/mnt/c/Windows/System32/cmd.exe'
+	out=$($cmd /C powershell -Command Get-Clipboard)
+	# strip trailing LF that's always added and all CRs
+	echo -n $out | sed 's/\r$//'
+}
+
+vc_wsl_ps_copy() {
+	cmd='/mnt/c/Windows/System32/cmd.exe'
+	# this doesn't work, cmd or powershell doesn't receive piped data
+	# it's also slower to launch two shells
+	#cat - | $cmd /C powershell -Command Set-Clipboard
+	$cmd /C clip
+}
+
+vc_wsl_yank_paste() {
+	win32yank.exe -o | sed 's/\r$//'
+}
+
+vc_wsl_yank_copy() {
+	win32yank.exe -i
 }
 
 case "$1" in
