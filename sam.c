@@ -297,6 +297,7 @@ enum {
 	OPTION_SAVE_METHOD,
 	OPTION_LOAD_METHOD,
 	OPTION_CHANGE_256COLORS,
+	OPTION_LAYOUT,
 };
 
 static const OptionDef options[] = {
@@ -379,6 +380,11 @@ static const OptionDef options[] = {
 		{ "change-256colors" },
 		VIS_OPTION_TYPE_BOOL,
 		VIS_HELP("Change 256 color palette to support 24bit colors")
+	},
+	[OPTION_LAYOUT] = {
+		{ "layout" },
+		VIS_OPTION_TYPE_STRING,
+		VIS_HELP("Vertical or horizontal window layout")
 	},
 };
 
@@ -1379,9 +1385,13 @@ static int extract(Vis *vis, Win *win, Command *cmd, const char *argv[], Selecti
 		RegexMatch match[nsub];
 		while (start < end || trailing_match) {
 			trailing_match = false;
-			bool found = text_search_range_forward(txt, start,
-				end - start, cmd->regex, nsub, match,
-				start > range->start ? REG_NOTBOL : 0) == 0;
+			char c;
+			int flags = start > range->start &&
+			            text_byte_get(txt, start - 1, &c) && c != '\n' ?
+			            REG_NOTBOL : 0;
+			bool found = !text_search_range_forward(txt, start, end - start,
+			                                        cmd->regex, nsub, match,
+			                                        flags);
 			Filerange r = text_range_empty();
 			if (found) {
 				if (argv[0][0] == 'x')
@@ -1613,23 +1623,28 @@ static bool cmd_write(Vis *vis, Win *win, Command *cmd, const char *argv[], Sele
 	}
 
 	for (const char **name = argv[1] ? &argv[1] : (const char*[]){ filename, NULL }; *name; name++) {
+
+		char *path = absolute_path(*name);
+		if (!path)
+			return false;
+
 		struct stat meta;
-		if (cmd->flags != '!' && file->stat.st_mtime && stat(*name, &meta) == 0 &&
+		if (cmd->flags != '!' && file->stat.st_mtime && stat(path, &meta) == 0 &&
 		    file->stat.st_mtime < meta.st_mtime) {
 			vis_info_show(vis, "WARNING: file has been changed since reading it");
-			return false;
+			goto err;
 		}
 
-		if (!vis_event_emit(vis, VIS_EVENT_FILE_SAVE_PRE, file, *name) && cmd->flags != '!') {
-			vis_info_show(vis, "Rejected write to `%s' by pre-save hook", *name);
-			return false;
+		if (!vis_event_emit(vis, VIS_EVENT_FILE_SAVE_PRE, file, path) && cmd->flags != '!') {
+			vis_info_show(vis, "Rejected write to `%s' by pre-save hook", path);
+			goto err;
 		}
 
-		TextSave *ctx = text_save_begin(text, *name, file->save_method);
+		TextSave *ctx = text_save_begin(text, path, file->save_method);
 		if (!ctx) {
 			const char *msg = errno ? strerror(errno) : "try changing `:set savemethod`";
-			vis_info_show(vis, "Can't write `%s': %s", *name, msg);
-			return false;
+			vis_info_show(vis, "Can't write `%s': %s", path, msg);
+			goto err;
 		}
 
 		bool failure = false;
@@ -1649,15 +1664,21 @@ static bool cmd_write(Vis *vis, Win *win, Command *cmd, const char *argv[], Sele
 		}
 
 		if (failure || !text_save_commit(ctx)) {
-			vis_info_show(vis, "Can't write `%s': %s", *name, strerror(errno));
-			return false;
+			vis_info_show(vis, "Can't write `%s': %s", path, strerror(errno));
+			goto err;
 		}
 
 		if (!file->name)
-			file_name_set(file, *name);
-		if (strcmp(file->name, *name) == 0)
+			file_name_set(file, path);
+		if (strcmp(file->name, path) == 0)
 			file->stat = text_stat(text);
-		vis_event_emit(vis, VIS_EVENT_FILE_SAVE_POST, file, *name);
+		vis_event_emit(vis, VIS_EVENT_FILE_SAVE_POST, file, path);
+		free(path);
+		continue;
+
+	err:
+		free(path);
+		return false;
 	}
 	return true;
 }
