@@ -13,7 +13,7 @@ vc_usage() {
 
 vc_determine_command() {
 	if [ -n "$DISPLAY" ]; then
-		for c in xclip xsel; do
+		for c in xcmenu xclip xsel; do
 			if type "$c" >/dev/null 2>&1; then
 				echo "$c"
 				return 0
@@ -92,6 +92,20 @@ vc_xclip_copy() {
 
 vc_xclip_paste() {
 	xclip -selection clipboard -o
+}
+
+vc_xcmenu_copy() {
+	# primary for S-Ins, clipboard for C-v
+	dir=$(mktemp -d)
+	pipe=$dir/pipe
+	mkfifo $pipe
+	cat $pipe | xcmenu -pi >/dev/null 2>&1 &
+	tee $pipe | xcmenu -ci >/dev/null 2>&1
+	rm -f $pipe
+}
+
+vc_xcmenu_paste() {
+	xcmenu -p
 }
 
 vc_mac_copy() {
