@@ -1,7 +1,6 @@
-Vis a vim-like text editor
-==========================
+# Vis - Combining Modal Editing with Structural Regular Expressions
 
-[![builds.sr.ht status](https://builds.sr.ht/~martanne/vis.svg)](https://builds.sr.ht/~martanne/vis)
+[![builds.sr.ht status](https://builds.sr.ht/~martanne/vis/commits.svg)](https://builds.sr.ht/~martanne/vis/commits?)
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/3939/badge.svg)](https://scan.coverity.com/projects/3939)
 [![codecov](https://codecov.io/gh/martanne/vis/branch/master/graph/badge.svg)](https://codecov.io/gh/martanne/vis)
 [![Documentation Status](https://readthedocs.org/projects/vis/badge/?version=master)](http://vis.readthedocs.io/en/master/?badge=master)
@@ -61,8 +60,8 @@ Assuming these dependencies are met, execute:
     $ ./configure && make && sudo make install
 
 By default the `configure` script will try to auto detect support for
-Lua. See `configure --help` for a list of supported options. You can
-also manually tweak the generated `config.mk` file.
+Lua using `pkg-config(1)`. See `configure --help` for a list of supported
+options. You can also manually tweak the generated `config.mk` file.
 
 Or simply use one of the
 [distribution provided packages](https://github.com/martanne/vis/wiki/Distribution-Packages).

@@ -100,6 +100,10 @@ bool vis_event_emit(Vis *vis, enum VisEvents id, ...) {
 		if (vis->event->quit)
 			vis->event->quit(vis);
 		break;
+	case VIS_EVENT_TERM_CSI:
+		if (vis->event->term_csi)
+			vis->event->term_csi(vis, va_arg(ap, const long *));
+		break;
 	}
 
 	va_end(ap);
@@ -675,6 +679,7 @@ Vis *vis_new(Ui *ui, VisEvent *event) {
 		register_init(&vis->registers[i]);
 	vis->registers[VIS_REG_BLACKHOLE].type = REGISTER_BLACKHOLE;
 	vis->registers[VIS_REG_CLIPBOARD].type = REGISTER_CLIPBOARD;
+	vis->registers[VIS_REG_PRIMARY].type = REGISTER_CLIPBOARD;
 	vis->registers[VIS_REG_NUMBER].type = REGISTER_NUMBER;
 	array_init(&vis->operators);
 	array_init(&vis->motions);
@@ -1013,7 +1018,7 @@ void vis_do(Vis *vis) {
 			register_resize(reg, last_reg_slot+1);
 		}
 
-		/* we do not support visual repeat, still do something resonable */
+		/* we do not support visual repeat, still do something reasonable */
 		if (vis->mode->visual && !a->movement && !a->textobj)
 			a->movement = &vis_motions[VIS_MOVE_NOP];
 
@@ -1303,6 +1308,17 @@ static const char *getkey(Vis *vis) {
 	}
 
 	TermKey *termkey = vis->ui->termkey_get(vis->ui);
+	if (key.type == TERMKEY_TYPE_UNKNOWN_CSI) {
+		long args[18];
+		size_t nargs;
+		unsigned long cmd;
+		if (termkey_interpret_csi(termkey, &key, &args[2], &nargs, &cmd) == TERMKEY_RES_KEY) {
+			args[0] = (long)cmd;
+			args[1] = nargs;
+			vis_event_emit(vis, VIS_EVENT_TERM_CSI, args);
+		}
+		return getkey(vis);
+	}
 	termkey_strfkey(termkey, vis->key, sizeof(vis->key), &key, TERMKEY_FORMAT_VIM);
 	return vis->key;
 }
@@ -1380,7 +1396,8 @@ int vis_run(Vis *vis) {
 			vis_die(vis, "Killed by SIGTERM\n");
 		if (vis->interrupted) {
 			vis->interrupted = false;
-			vis_keys_feed(vis, "<C-c>");
+			vis_keys_push(vis, "<C-c>", 0, true);
+			continue;
 		}
 
 		if (vis->resume) {
@@ -1669,7 +1686,7 @@ void vis_insert_nl(Vis *vis) {
 		size_t newpos = vis_text_insert_nl(vis, txt, pos);
 		/* This is a bit of a hack to fix cursor positioning when
 		 * inserting a new line at the start of the view port.
-		 * It has the effect of reseting the mark used by the view
+		 * It has the effect of resetting the mark used by the view
 		 * code to keep track of the start of the visible region.
 		 */
 		view_cursors_to(s, pos);
@@ -1684,7 +1701,8 @@ Regex *vis_regex(Vis *vis, const char *pattern) {
 	Regex *regex = text_regex_new();
 	if (!regex)
 		return NULL;
-	if (text_regex_compile(regex, pattern, REG_EXTENDED|REG_NEWLINE) != 0) {
+	int cflags = REG_EXTENDED|REG_NEWLINE|(REG_ICASE*vis->ignorecase);
+	if (text_regex_compile(regex, pattern, cflags) != 0) {
 		text_regex_free(regex);
 		return NULL;
 	}
@@ -1842,8 +1860,8 @@ int vis_pipe(Vis *vis, File *file, Filerange *range, const char *argv[],
 			if (len > 0) {
 				rout.start += len;
 				if (text_range_size(&rout) == 0) {
-					close(pout[1]);
-					pout[1] = -1;
+					close(pin[1]);
+					pin[1] = -1;
 				}
 			} else {
 				close(pin[1]);
@@ -1946,14 +1964,14 @@ bool vis_cmd(Vis *vis, const char *cmdline) {
 		return true;
 	while (*cmdline == ':')
 		cmdline++;
-	size_t len = strlen(cmdline);
-	char *line = malloc(len+2);
+	char *line = strdup(cmdline);
 	if (!line)
 		return false;
-	strncpy(line, cmdline, len+1);
 
-	for (char *end = line + len - 1; end >= line && isspace((unsigned char)*end); end--)
-		*end = '\0';
+	size_t len = strlen(line);
+	while (len > 0 && isspace((unsigned char)line[len-1]))
+		len--;
+	line[len] = '\0';
 
 	enum SamError err = sam_cmd(vis, line);
 	if (err != SAM_ERR_OK)

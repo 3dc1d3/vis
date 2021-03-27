@@ -227,6 +227,7 @@ OS=$(uname)
 
 case "$OS" in
 FreeBSD|DragonFly) CFLAGS_STD="$CFLAGS_STD -D_BSD_SOURCE -D__BSD_VISIBLE=1" ;;
+NetBSD)  CFLAGS_STD="$CFLAGS_STD -D_NETBSD_SOURCE" ;;
 *BSD)    CFLAGS_STD="$CFLAGS_STD -D_BSD_SOURCE" ;;
 Darwin)  CFLAGS_STD="$CFLAGS_STD -D_DARWIN_C_SOURCE" ;;
 AIX)     CFLAGS_STD="$CFLAGS_STD -D_ALL_SOURCE" ;;
@@ -235,7 +236,7 @@ esac
 tryflag CFLAGS -pipe
 
 # Try flags to optimize binary size
-tryflag CFLAGS -Os
+tryflag CFLAGS -O2
 tryflag CFLAGS -ffunction-sections
 tryflag CFLAGS -fdata-sections
 tryldflag LDFLAGS_AUTO -Wl,--gc-sections
@@ -309,7 +310,7 @@ int main(int argc, char *argv[]) {
 }
 EOF
 
-	for libcurses in ncursesw ncurses libcurses; do
+	for libcurses in ncursesw ncurses curses; do
 		printf " checking for %s... " "$libcurses"
 
 		if test "$have_pkgconfig" = "yes" ; then
@@ -474,7 +475,7 @@ EOF
 	test "$lua" = "yes" -a $CONFIG_LUA -ne 1 && fail "$0: cannot find liblua"
 
 	if test $CONFIG_LUA -eq 1; then
-		CFLAGS_LUA="$CFLAGS_LUA -DLUA_COMPAT_5_1 -DLUA_COMPAT_5_2 -DLUA_COMPAT_ALL"
+		CFLAGS_LUA="$CFLAGS_LUA -DLUA_COMPAT_5_1 -DLUA_COMPAT_5_2 -DLUA_COMPAT_5_3 -DLUA_COMPAT_ALL"
 	fi
 fi
 
@@ -618,7 +619,7 @@ int main(int argc, char *argv[]) {
 }
 EOF
 
-if $CC $CFLAGS "$tmpc" $LDFLAGS -o "$tmpo" >/dev/null 2>&1; then
+if $CC $CFLAGS $CFLAGS_STD "$tmpc" $LDFLAGS -o "$tmpo" >/dev/null 2>&1; then
 	HAVE_MEMRCHR=1
 	printf "%s\n" "yes"
 else

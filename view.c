@@ -358,7 +358,7 @@ void view_draw(View *view) {
 			cell = (Cell){ .data = "\xEF\xBF\xBD", .len = len, .width = 1 };
 		} else if (len == (size_t)-2) {
 			/* not enough bytes available to convert to a
-			 * wide character. advance file position and read
+			 * wide character. Advance file position and read
 			 * another junk into buffer.
 			 */
 			rem = text_bytes_get(view->text, pos+prev_cell.len, size, text);
@@ -1196,8 +1196,11 @@ void view_selections_clear_all(View *view) {
 }
 
 void view_selections_dispose_all(View *view) {
-	for (Selection *s = view->selections, *next; s; s = next) {
-		next = s->next;
+	Selection *last = view->selections;
+	while (last->next)
+		last = last->next;
+	for (Selection *s = last, *prev; s; s = prev) {
+		prev = s->prev;
 		if (s != view->selection)
 			selection_free(s);
 	}

@@ -112,7 +112,33 @@ static size_t longword_next(Vis *vis, Text *txt, size_t pos) {
 	                        VIS_MOVE_LONGWORD_END_NEXT, isspace);
 }
 
-static size_t to(Vis *vis, Text *txt, size_t pos) {
+static size_t to_right(Vis *vis, Text *txt, size_t pos) {
+	char c;
+	size_t hit = text_find_next(txt, pos+1, vis->search_char);
+	if (!text_byte_get(txt, hit, &c) || c != vis->search_char[0])
+		return pos;
+	return hit;
+}
+
+static size_t till_right(Vis *vis, Text *txt, size_t pos) {
+	size_t hit = to_right(vis, txt, pos+1);
+	if (hit != pos)
+		return text_char_prev(txt, hit);
+	return pos;
+}
+
+static size_t to_left(Vis *vis, Text *txt, size_t pos) {
+	return text_find_prev(txt, pos, vis->search_char);
+}
+
+static size_t till_left(Vis *vis, Text *txt, size_t pos) {
+	size_t hit = to_left(vis, txt, pos-1);
+	if (hit != pos-1)
+		return text_char_next(txt, hit);
+	return pos;
+}
+
+static size_t to_line_right(Vis *vis, Text *txt, size_t pos) {
 	char c;
 	if (pos == text_line_end(txt, pos))
 		return pos;
@@ -122,8 +148,8 @@ static size_t to(Vis *vis, Text *txt, size_t pos) {
 	return hit;
 }
 
-static size_t till(Vis *vis, Text *txt, size_t pos) {
-	size_t hit = to(vis, txt, pos+1);
+static size_t till_line_right(Vis *vis, Text *txt, size_t pos) {
+	size_t hit = to_line_right(vis, txt, pos+1);
 	if (pos == text_line_end(txt, pos))
 		return pos;
 	if (hit != pos)
@@ -131,14 +157,14 @@ static size_t till(Vis *vis, Text *txt, size_t pos) {
 	return pos;
 }
 
-static size_t to_left(Vis *vis, Text *txt, size_t pos) {
+static size_t to_line_left(Vis *vis, Text *txt, size_t pos) {
 	return text_line_find_prev(txt, pos, vis->search_char);
 }
 
-static size_t till_left(Vis *vis, Text *txt, size_t pos) {
+static size_t till_line_left(Vis *vis, Text *txt, size_t pos) {
 	if (pos == text_line_begin(txt, pos))
 		return pos;
-	size_t hit = to_left(vis, txt, pos-1);
+	size_t hit = to_line_left(vis, txt, pos-1);
 	if (hit != pos-1)
 		return text_char_next(txt, hit);
 	return pos;
@@ -294,10 +320,14 @@ bool vis_motion(Vis *vis, enum VisMotion motion, ...) {
 		}
 		break;
 	}
-	case VIS_MOVE_RIGHT_TO:
-	case VIS_MOVE_LEFT_TO:
-	case VIS_MOVE_RIGHT_TILL:
-	case VIS_MOVE_LEFT_TILL:
+	case VIS_MOVE_TO_RIGHT:
+	case VIS_MOVE_TO_LEFT:
+	case VIS_MOVE_TO_LINE_RIGHT:
+	case VIS_MOVE_TO_LINE_LEFT:
+	case VIS_MOVE_TILL_RIGHT:
+	case VIS_MOVE_TILL_LEFT:
+	case VIS_MOVE_TILL_LINE_RIGHT:
+	case VIS_MOVE_TILL_LINE_LEFT:
 	{
 		const char *key = va_arg(ap, char*);
 		if (!key)
@@ -314,17 +344,29 @@ bool vis_motion(Vis *vis, enum VisMotion motion, ...) {
 		break;
 	case VIS_MOVE_TOTILL_REVERSE:
 		switch (vis->last_totill) {
-		case VIS_MOVE_RIGHT_TO:
-			motion = VIS_MOVE_LEFT_TO;
+		case VIS_MOVE_TO_RIGHT:
+			motion = VIS_MOVE_TO_LEFT;
 			break;
-		case VIS_MOVE_LEFT_TO:
-			motion = VIS_MOVE_RIGHT_TO;
+		case VIS_MOVE_TO_LEFT:
+			motion = VIS_MOVE_TO_RIGHT;
 			break;
-		case VIS_MOVE_RIGHT_TILL:
-			motion = VIS_MOVE_LEFT_TILL;
+		case VIS_MOVE_TO_LINE_RIGHT:
+			motion = VIS_MOVE_TO_LINE_LEFT;
 			break;
-		case VIS_MOVE_LEFT_TILL:
-			motion = VIS_MOVE_RIGHT_TILL;
+		case VIS_MOVE_TO_LINE_LEFT:
+			motion = VIS_MOVE_TO_LINE_RIGHT;
+			break;
+		case VIS_MOVE_TILL_RIGHT:
+			motion = VIS_MOVE_TILL_LEFT;
+			break;
+		case VIS_MOVE_TILL_LEFT:
+			motion = VIS_MOVE_TILL_RIGHT;
+			break;
+		case VIS_MOVE_TILL_LINE_RIGHT:
+			motion = VIS_MOVE_TILL_LINE_LEFT;
+			break;
+		case VIS_MOVE_TILL_LINE_LEFT:
+			motion = VIS_MOVE_TILL_LINE_RIGHT;
 			break;
 		default:
 			goto err;
@@ -515,20 +557,36 @@ const Movement vis_motions[] = {
 		.txt = lastline,
 		.type = LINEWISE|LINEWISE_INCLUSIVE|JUMP|IDEMPOTENT,
 	},
-	[VIS_MOVE_LEFT_TO] = {
+	[VIS_MOVE_TO_LEFT] = {
 		.vis = to_left,
 		.type = COUNT_EXACT,
 	},
-	[VIS_MOVE_RIGHT_TO] = {
-		.vis = to,
+	[VIS_MOVE_TO_RIGHT] = {
+		.vis = to_right,
 		.type = INCLUSIVE|COUNT_EXACT,
 	},
-	[VIS_MOVE_LEFT_TILL] = {
+	[VIS_MOVE_TO_LINE_LEFT] = {
+		.vis = to_line_left,
+		.type = COUNT_EXACT,
+	},
+	[VIS_MOVE_TO_LINE_RIGHT] = {
+		.vis = to_line_right,
+		.type = INCLUSIVE|COUNT_EXACT,
+	},
+	[VIS_MOVE_TILL_LEFT] = {
 		.vis = till_left,
 		.type = COUNT_EXACT,
 	},
-	[VIS_MOVE_RIGHT_TILL] = {
-		.vis = till,
+	[VIS_MOVE_TILL_RIGHT] = {
+		.vis = till_right,
+		.type = INCLUSIVE|COUNT_EXACT,
+	},
+	[VIS_MOVE_TILL_LINE_LEFT] = {
+		.vis = till_line_left,
+		.type = COUNT_EXACT,
+	},
+	[VIS_MOVE_TILL_LINE_RIGHT] = {
+		.vis = till_line_right,
 		.type = INCLUSIVE|COUNT_EXACT,
 	},
 	[VIS_MOVE_SEARCH_WORD_FORWARD] = {

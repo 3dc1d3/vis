@@ -40,7 +40,7 @@ vis.ftdetect.filetypes = {
 		ext = { "%.awk$" },
 	},
 	bash = {
-		ext = { "%.bash$", "%.csh$", "%.sh$", "%.zsh$" },
+		ext = { "%.bash$", "%.csh$", "%.sh$", "%.zsh$" ,"^APKBUILD$", "%.ebuild$"},
 		mime = { "text/x-shellscript", "application/x-shellscript" },
 	},
 	batch = {
@@ -149,6 +149,10 @@ vis.ftdetect.filetypes = {
 	gap = {
 		ext = { "%.g$", "%.gd$", "%.gi$", "%.gap$" },
 	},
+	gemini = {
+		ext = { "%.gmi" },
+		mime = { "text/gemini" },
+	},
 	gettext = {
 		ext = { "%.po$", "%.pot$" },
 	},
@@ -204,7 +208,7 @@ vis.ftdetect.filetypes = {
 		ext = { "%.bsh$", "%.java$" },
 	},
 	javascript = {
-		ext = { "%.js$", "%.jsfl$" },
+		ext = { "%.cjs$", "%.js$", "%.jsfl$", "%.mjs$", "%.ts$" },
 	},
 	json = {
 		ext = { "%.json$" },
@@ -227,7 +231,7 @@ vis.ftdetect.filetypes = {
 		ext = { "%.less$" },
 	},
 	lilypond = {
-		ext = { "%.lily$", "%.ly$" },
+		ext = { "%.ily$", "%.ly$" },
 	},
 	lisp = {
 		ext = { "%.cl$", "%.el$", "%.lisp$", "%.lsp$" },
@@ -246,6 +250,9 @@ vis.ftdetect.filetypes = {
 	makefile = {
 		ext = { "%.iface$", "%.mak$", "%.mk$", "GNUmakefile", "makefile", "Makefile" },
 		mime = { "text/x-makefile" },
+		detect = function(_, data)
+			return data:match("^#!/usr/bin/make")
+		end
 	},
 	man = {
 		ext = {
@@ -257,6 +264,9 @@ vis.ftdetect.filetypes = {
 	markdown = {
 		ext = { "%.md$", "%.markdown$" },
 		mime = { "text/x-markdown" },
+	},
+	meson = {
+		ext = { "^meson%.build$" },
 	},
 	moonscript = {
 		ext = { "%.moon$" },
@@ -343,6 +353,12 @@ vis.ftdetect.filetypes = {
 	rhtml = {
 		ext = { "%.erb$", "%.rhtml$" },
 	},
+	routeros = {
+		ext = { "%.rsc" },
+		detect = function(_, data)
+			return data:match("^#.* by RouterOS")
+		end
+	},
 	rstats = {
 		ext = { "%.R$", "%.Rout$", "%.Rhistory$", "%.Rt$", "Rout.save", "Rout.fail" },
 	},
@@ -363,7 +379,7 @@ vis.ftdetect.filetypes = {
 		mime = { "text/x-scala" },
 	},
 	scheme = {
-		ext = { "%.sch$", "%.scm$", "%.sld$", "%.sls$", "%.ss$" },
+		ext = { "%.rkt$", "%.sch$", "%.scm$", "%.sld$", "%.sls$", "%.ss$" },
 	},
 	smalltalk = {
 		ext = { "%.changes$", "%.st$", "%.sources$" },
@@ -381,7 +397,7 @@ vis.ftdetect.filetypes = {
 		ext = { "%.ddl$", "%.sql$" },
 	},
 	strace = {
-		detect = function(file, data)
+		detect = function(_, data)
 			return data:match("^execve%(")
 		end
 	},
@@ -403,7 +419,8 @@ vis.ftdetect.filetypes = {
 	},
 	text = {
 		ext = { "%.txt$" },
-		mime = { "text/plain" },
+		-- Do *not* list mime "text/plain" here, it is covered below,
+		-- see 'try text lexer as a last resort'
 	},
 	toml = {
 		ext = { "%.toml$" },
@@ -422,7 +439,7 @@ vis.ftdetect.filetypes = {
 		ext = { "%.vcf$", "%.vcard$" },
 	},
 	verilog = {
-		ext = { "%.v$", "%.ver$" },
+		ext = { "%.v$", "%.ver$", "%.sv$" },
 	},
 	vhdl = {
 		ext = { "%.vh$", "%.vhd$", "%.vhdl$" },
@@ -442,6 +459,9 @@ vis.ftdetect.filetypes = {
 	yaml = {
 		ext = { "%.yaml$", "%.yml$" },
 		mime = { "text/x-yaml" },
+	},
+	zig = {
+		ext = { "%.zig$" },
 	},
 }
 
@@ -484,10 +504,11 @@ vis.events.subscribe(vis.events.WIN_OPEN, function(win)
 	end
 
 	-- run file(1) to determine mime type
+	local mime
 	if name ~= nil then
 		local file = io.popen(string.format("file -bL --mime-type -- '%s'", name:gsub("'", "'\\''")))
 		if file then
-			local mime = file:read('*all')
+			mime = file:read('*all')
 			file:close()
 			if mime then
 				mime = mime:gsub('%s*$', '')

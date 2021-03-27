@@ -2,7 +2,7 @@
  * Heavily inspired (and partially based upon) the X11 version of
  * Rob Pike's sam text editor originally written for Plan 9.
  *
- *  Copyright © 2016-2018 Marc André Tanner <mat at brain-dump.org>
+ *  Copyright © 2016-2020 Marc André Tanner <mat at brain-dump.org>
  *  Copyright © 1998 by Lucent Technologies
  *
  * Permission to use, copy, modify, and distribute this software for any
@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <limits.h>
+#include <fcntl.h>
 #include "sam.h"
 #include "vis-core.h"
 #include "buffer.h"
@@ -144,7 +145,7 @@ static bool cmd_user(Vis*, Win*, Command*, const char *argv[], Selection*, Filer
 
 static const CommandDef cmds[] = {
 	//      name            help
-	//      flags, default command, implemenation
+	//      flags, default command, implementation
 	{
 		"a",            VIS_HELP("Append text after range")
 		CMD_TEXT, NULL, cmd_append
@@ -277,7 +278,7 @@ typedef struct {
 	const char *names[3];            /* name and optional alias */
 	enum VisOption flags;            /* option type, etc. */
 	VIS_HELP_DECL(const char *help;) /* short, one line help text */
-	VisOptionFunction *func;         /* option handler, NULL for bulitins */
+	VisOptionFunction *func;         /* option handler, NULL for builtins */
 	void *context;                   /* context passed to option handler function */
 } OptionDef;
 
@@ -299,6 +300,7 @@ enum {
 	OPTION_LOAD_METHOD,
 	OPTION_CHANGE_256COLORS,
 	OPTION_LAYOUT,
+	OPTION_IGNORECASE,
 };
 
 static const OptionDef options[] = {
@@ -386,6 +388,11 @@ static const OptionDef options[] = {
 		{ "layout" },
 		VIS_OPTION_TYPE_STRING,
 		VIS_HELP("Vertical or horizontal window layout")
+	},
+	[OPTION_IGNORECASE] = {
+		{ "ignorecase", "ic" },
+		VIS_OPTION_TYPE_BOOL,
+		VIS_HELP("Ignore case when searching")
 	},
 };
 
@@ -1005,7 +1012,7 @@ static Filerange address_line_evaluate(Address *addr, File *file, Filerange *ran
 	size_t start = range->start, end = range->end, line;
 	if (sign > 0) {
 		char c;
-		if (start < end && end > 0 && text_byte_get(txt, end-1, &c) && c == '\n')
+		if (start < end && text_byte_get(txt, end-1, &c) && c == '\n')
 			end--;
 		line = text_lineno_by_pos(txt, end);
 		line = text_pos_by_lineno(txt, line + offset);
@@ -1386,14 +1393,13 @@ static int extract(Vis *vis, Win *win, Command *cmd, const char *argv[], Selecti
 	Text *txt = win->file->text;
 
 	if (cmd->regex) {
-		bool trailing_match = false;
-		size_t start = range->start, end = range->end, last_start = EPOS;
+		size_t start = range->start, end = range->end;
+		size_t last_start = argv[0][0] == 'x' ? EPOS : start;
 		size_t nsub = 1 + text_regex_nsub(cmd->regex);
 		if (nsub > MAX_REGEX_SUB)
 			nsub = MAX_REGEX_SUB;
 		RegexMatch match[MAX_REGEX_SUB];
-		while (start < end || trailing_match) {
-			trailing_match = false;
+		while (start <= end) {
 			char c;
 			int flags = start > range->start &&
 			            text_byte_get(txt, start - 1, &c) && c != '\n' ?
@@ -1406,7 +1412,7 @@ static int extract(Vis *vis, Win *win, Command *cmd, const char *argv[], Selecti
 				if (argv[0][0] == 'x')
 					r = text_range_new(match[0].start, match[0].end);
 				else
-					r = text_range_new(start, match[0].start);
+					r = text_range_new(last_start, match[0].start);
 				if (match[0].start == match[0].end) {
 					if (last_start == match[0].start) {
 						start++;
@@ -1417,16 +1423,17 @@ static int extract(Vis *vis, Win *win, Command *cmd, const char *argv[], Selecti
 					 * matches the zero-length string immediately after a
 					 * newline. Try filtering out the last such match at EOF.
 					 */
-					if (end == match[0].start && start > range->start)
+					if (end == match[0].start && start > range->start &&
+					    text_byte_get(txt, end-1, &c) && c == '\n')
 						break;
+					start = match[0].end + 1;
+				} else {
+					start = match[0].end;
 				}
-				start = match[0].end;
-				if (start == end)
-					trailing_match = true;
 			} else {
 				if (argv[0][0] == 'y')
 					r = text_range_new(start, end);
-				start = end;
+				start = end + 1;
 			}
 
 			if (text_range_valid(&r)) {
@@ -1435,12 +1442,14 @@ static int extract(Vis *vis, Win *win, Command *cmd, const char *argv[], Selecti
 						Register *reg = &vis->registers[VIS_REG_AMPERSAND+i];
 						register_put_range(vis, reg, txt, &match[i]);
 					}
+					last_start = match[0].end;
+				} else {
+					last_start = start;
 				}
 				if (simulate)
 					count++;
 				else
 					ret &= sam_execute(vis, win, cmd->cmd, NULL, &r);
-				last_start = start;
 			}
 		}
 	} else {
@@ -1670,7 +1679,7 @@ static bool cmd_write(Vis *vis, Win *win, Command *cmd, const char *argv[], Sele
 		if (write_entire_file)
 			*r = text_range_new(0, text_size(text));
 
-		TextSave *ctx = text_save_begin(text, path, file->save_method);
+		TextSave *ctx = text_save_begin(text, AT_FDCWD, path, file->save_method);
 		if (!ctx) {
 			const char *msg = errno ? strerror(errno) : "try changing `:set savemethod`";
 			vis_info_show(vis, "Can't write `%s': %s", path, msg);

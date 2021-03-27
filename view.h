@@ -56,13 +56,13 @@ Filerange view_viewport_get(View*);
 /**
  * Get window coordinate of text position.
  * @param pos The position to query.
- * @param line Will be updated with screen line on which `pos` resides.
- * @param row Will be updaded with zero based window row on which `pos` resides.
- * @param col Will be updated with zero based window column which `pos` resides.
- * @return Whether `pos` is visible. If not, the pointer arguments are left unmodified.
+ * @param line Will be updated with screen line on which ``pos`` resides.
+ * @param row Will be updaded with zero based window row on which ``pos`` resides.
+ * @param col Will be updated with zero based window column on which ``pos`` resides.
+ * @return Whether ``pos`` is visible. If not, the pointer arguments are left unmodified.
  */
 bool view_coord_get(View*, size_t pos, Line **line, int *row, int *col);
-/** Get position at the start ot the `n`-th window line, counting from 1. */
+/** Get position at the start of the ``n``-th window line, counting from 1. */
 size_t view_screenline_goto(View*, int n);
 /** Get first screen line. */
 Line *view_lines_first(View*);
@@ -122,7 +122,7 @@ Selection *view_selections_new_force(View*, size_t pos);
 /**
  * Dispose an existing selection.
  * @rst
- * .. warning:: Not applicaple for the last existing selection.
+ * .. warning:: Not applicable for the last existing selection.
  * @endrst
  */
 bool view_selections_dispose(Selection*);
@@ -138,7 +138,7 @@ bool view_selections_dispose_force(Selection*);
  * Query state of primary selection.
  *
  * If the primary selection was marked for destruction, return it and
- * clear descruction flag.
+ * clear destruction flag.
  */
 Selection *view_selection_disposed(View*);
 /** Dispose all but the primary selection. */
@@ -147,7 +147,7 @@ void view_selections_dispose_all(View*);
 void view_selections_normalize(View*);
 /**
  * Replace currently active selections.
- * @param array The Array of ``Filerange``s.
+ * @param array The array of ``Filerange`` objects.
  * @param anchored Whether *all* selection should be anchored.
  */
 void view_selections_set_all(View*, Array*, bool anchored);
@@ -176,7 +176,7 @@ int view_selections_count(View*);
 /**
  * Get selection index.
  * @rst
- * .. note:: Is always in range `[0, count-1]`.
+ * .. note:: Is always in range ``[0, count-1]``.
  * .. warning: The relative order is determined during creation and assumed
  *             to remain the same.
  * @endrst
@@ -259,7 +259,7 @@ Line *view_cursors_line_get(Selection*);
 /**
  * Get zero based index of screen cell on which selection cursor currently resides.
  * @rst
- * .. warning:: Returns `-1` if the selection cursor is currently not visible.
+ * .. warning:: Returns ``-1`` if the selection cursor is currently not visible.
  * @endrst
  */
 int view_cursors_cell_get(Selection*);
@@ -324,7 +324,7 @@ size_t view_screenline_end(Selection*);
  */
 /**
  * Move primary selection cursor to the given position.
- * Makes sure that position is visisble.
+ * Makes sure that position is visible.
  * @rst
  * .. note:: If position was not visible before, we attempt to show
  *           surrounding context. The viewport will be adjusted such

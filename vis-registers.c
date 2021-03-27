@@ -69,16 +69,21 @@ const char *register_slot_get(Vis *vis, Register *reg, size_t slot, size_t *len)
 	case REGISTER_CLIPBOARD:
 	{
 		Buffer buferr;
+		enum VisRegister id = reg - vis->registers;
+		const char *cmd[] = { VIS_CLIPBOARD, "--paste", "--selection", NULL, NULL };
 		buffer_init(&buferr);
 		Buffer *buf = array_get(&reg->values, slot);
 		if (!buf)
 			return NULL;
 		buffer_clear(buf);
 
+		if (id == VIS_REG_PRIMARY)
+			cmd[3] = "primary";
+		else
+			cmd[3] = "clipboard";
 		int status = vis_pipe(vis, vis->win->file,
 			&(Filerange){ .start = 0, .end = 0 },
-			(const char*[]){ VIS_CLIPBOARD, "--paste", NULL },
-			buf, read_buffer, &buferr, read_buffer);
+			cmd, buf, read_buffer, &buferr, read_buffer);
 
 		if (status != 0)
 			vis_info_show(vis, "Command failed %s", buffer_content0(&buferr));
@@ -152,11 +157,17 @@ bool register_slot_put_range(Vis *vis, Register *reg, size_t slot, Text *txt, Fi
 	case REGISTER_CLIPBOARD:
 	{
 		Buffer buferr;
+		const char *cmd[] = { VIS_CLIPBOARD, "--copy", "--selection", NULL, NULL };
+		enum VisRegister id = reg - vis->registers;
 		buffer_init(&buferr);
 
+		if (id == VIS_REG_PRIMARY)
+			cmd[3] = "primary";
+		else
+			cmd[3] = "clipboard";
+
 		int status = vis_pipe(vis, vis->win->file, range,
-			(const char*[]){ VIS_CLIPBOARD, "--copy", NULL },
-			NULL, NULL, &buferr, read_buffer);
+			cmd, NULL, NULL, &buferr, read_buffer);
 
 		if (status != 0)
 			vis_info_show(vis, "Command failed %s", buffer_content0(&buferr));
@@ -186,20 +197,36 @@ bool register_resize(Register *reg, size_t count) {
 }
 
 enum VisRegister vis_register_from(Vis *vis, char reg) {
-	switch (reg) {
-	case '+': return VIS_REG_CLIPBOARD;
-	case '@': return VIS_MACRO_LAST_RECORDED;
-	}
+
+	if (reg == '@')
+		return VIS_MACRO_LAST_RECORDED;
 
 	if ('a' <= reg && reg <= 'z')
 		return VIS_REG_a + reg - 'a';
 	if ('A' <= reg && reg <= 'Z')
 		return VIS_REG_A + reg - 'A';
+
 	for (size_t i = 0; i < LENGTH(vis_registers); i++) {
 		if (vis_registers[i].name == reg)
 			return i;
 	}
 	return VIS_REG_INVALID;
+}
+
+char vis_register_to(Vis *vis, enum VisRegister reg) {
+
+	if (reg == VIS_MACRO_LAST_RECORDED)
+		return '@';
+
+	if (VIS_REG_a <= reg && reg <= VIS_REG_z)
+		return 'a' + reg - VIS_REG_a;
+	if (VIS_REG_A <= reg && reg <= VIS_REG_Z)
+		return 'A' + reg - VIS_REG_A;
+
+	if (reg < LENGTH(vis_registers))
+		return vis_registers[reg].name;
+
+	return '\0';
 }
 
 void vis_register(Vis *vis, enum VisRegister reg) {
@@ -275,7 +302,8 @@ const RegisterDef vis_registers[] = {
 	[VIS_REG_9]          = { '9', VIS_HELP("9th sub-expression match")                         },
 	[VIS_REG_AMPERSAND]  = { '&', VIS_HELP("Last regex match")                                 },
 	[VIS_REG_BLACKHOLE]  = { '_', VIS_HELP("/dev/null register")                               },
-	[VIS_REG_CLIPBOARD]  = { '*', VIS_HELP("System clipboard register, see vis-clipboard(1)")  },
+	[VIS_REG_PRIMARY]    = { '*', VIS_HELP("Primary clipboard register, see vis-clipboard(1)") },
+	[VIS_REG_CLIPBOARD]  = { '+', VIS_HELP("System clipboard register, see vis-clipboard(1)")  },
 	[VIS_REG_DOT]        = { '.', VIS_HELP("Last inserted text")                               },
 	[VIS_REG_SEARCH]     = { '/', VIS_HELP("Last search pattern")                              },
 	[VIS_REG_COMMAND]    = { ':', VIS_HELP("Last :-command")                                   },
